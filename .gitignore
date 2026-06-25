@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# Environment Variables
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Python Build Files
+build/
+dist/
+*.egg-info/
+
+# Pytest
+.pytest_cache/
+
+# Mypy
+.mypy_cache/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Uploaded Images
+backend/static/uploads/*
+
+# Keep folder structure
+!backend/static/uploads/.gitkeep
+
+# Database Files (if using local db)
+*.db
+*.sqlite3
+
+# Model Files (optional)
+*.pt
+*.pth
+*.h5
+*.onnx
+
+# Jupyter
+.ipynb_checkpoints/
+
+# PyEnv
+.python-versionbackend/app/.env
+__pycache__/
+*.pyc
