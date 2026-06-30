@@ -56,23 +56,34 @@ st.title("👁️ Multi-Model Vision AI Dashboard")
 st.markdown("<p style='color: #64748B; font-size: 1.1rem; margin-top: -0.5rem;'>Orchestrate real-time Object Detection, Dense Captioning, OCR, and Contextual Analysis through a unified intelligence plane.</p>", unsafe_allow_html=True)
 st.markdown("---")
 
-# Sidebar for history or configurations
+# ==========================================
+# SIDEBAR CONFIGURATION: CONTROLS & INGESTION
+# ==========================================
 st.sidebar.header("Controls & History")
+st.sidebar.markdown("---")
 
-# 1. File Uploader
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
+st.sidebar.subheader("📁 Browse File")
+uploaded_file = st.sidebar.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
+
+# --- FIX: Track if the file has changed to allow consecutive new uploads ---
+if uploaded_file is not None:
+    # If the user uploaded a completely different file name, clear the old session variables
+    if "current_filename" not in st.session_state or st.session_state["current_filename"] != uploaded_file.name:
+        st.session_state["current_filename"] = uploaded_file.name
+        if "analysis_data" in st.session_state:
+            del st.session_state["analysis_data"]
+        if "image_id" in st.session_state:
+            del st.session_state["image_id"]
+        st.rerun()
 
 if uploaded_file is not None:
-    # Outer wrapping card for data ingestion
-    with st.container():
-        st.markdown("### 🖼️ Source Asset Preview")
-        # Forces display preview strictly within a professional 500px width boundary
-        st.image(uploaded_file, caption="Uploaded Image File (Target)", width=500)
+    # Trigger processing interface ONLY if data isn't processed yet
+    if "analysis_data" not in st.session_state:
+        st.sidebar.markdown("### 🖼️ Selected Source")
+        st.sidebar.image(uploaded_file, use_container_width=True)
         
-        # Action button spanning full width of the upload container
-        if st.button("⚡ Run Vision Inference", type="primary", use_container_width=True):
-            with st.spinner("Uploading and running vision pipelines..."):
-                # Send file to FastAPI
+        if st.sidebar.button("⚡ Run Vision Inference", type="primary", use_container_width=True):
+            with st.sidebar.spinner("Running vision pipelines..."):
                 files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
                 try:
                     response = requests.post(f"{BACKEND_URL}/upload/", files=files)
@@ -82,11 +93,8 @@ if uploaded_file is not None:
                         image_id = img_data["id"]
                         st.toast(f"📦 Ingested Asset ID: {image_id}", icon="✅")
                         
-                        # Polling backend for processing results
                         analysis_ready = False
-                        
-                        # Increased loop iterations to 45 to give your CPU plenty of headroom to complete inference without timing out
-                        with st.spinner("AI Models are executing deep inference on CPU..."):
+                        with st.sidebar.spinner("Executing deep inference on CPU..."):
                             for _ in range(45):  
                                 time.sleep(1)
                                 res = requests.get(f"{BACKEND_URL}/images/{image_id}/analysis")
@@ -101,89 +109,98 @@ if uploaded_file is not None:
                             st.session_state["analysis_data"] = analysis_data
                             st.rerun()
                         else:
-                            st.error("Processing timed out. Verify your backend logs for model blockage or long CPU calculation times.")
+                            st.sidebar.error("Processing timed out. Check backend console logs.")
                     else:
-                        st.error(f"Failed to upload image to backend. Status Code: {response.status_code}")
+                        st.sidebar.error(f"Upload failed. Status Code: {response.status_code}")
                 except requests.exceptions.ConnectionError:
-                    st.error("Could not connect to FastAPI. Please ensure your backend server is running on port 8000.")
+                    st.sidebar.error("Could not connect to FastAPI server.")
 
-# 2. Display Results if Analysis Data is in State
+# Dynamic LangChain Chat Placement Below File Browser
+if "analysis_data" in st.session_state:
+    img_id = st.session_state["image_id"]
+    
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("💬 LangChain Image Chat")
+    st.sidebar.markdown("<p style='color: #64748B; font-size: 0.85rem; margin-top: -0.5rem;'>Ask questions contextually linked to the active image.</p>", unsafe_allow_html=True)
+    
+    user_question = st.sidebar.text_input(
+        "Ask a specific question about this image:", 
+        placeholder="e.g., What is written on the board?",
+        label_visibility="collapsed"
+    )
+    
+    if st.sidebar.button("Ask AI Engine", type="primary", use_container_width=True):
+        if user_question:
+            st.sidebar.markdown(f"**Q:** `{user_question}`")
+            with st.sidebar.spinner("Interrogating Context..."):
+                try:
+                    chat_res = requests.post(
+                        f"{BACKEND_URL}/images/{img_id}/chat",
+                        json={"question": user_question}
+                    )
+                    if chat_res.status_code == 200:
+                        st.sidebar.markdown("**🤖 Response:**")
+                        st.sidebar.info(chat_res.json()['answer'])
+                    else:
+                        st.sidebar.error("Failed to get response from the Chat node.")
+                except Exception as e:
+                    st.sidebar.error(f"Chat failed: {str(e)}")
+
+# ==========================================
+# MAIN WORKSPACE AREA: VIEWPORT & TELEMETRY
+# ==========================================
 if "analysis_data" in st.session_state:
     data = st.session_state["analysis_data"]
     img_id = st.session_state["image_id"]
     
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    st.header("📊 Multi-Model Inference Insights")
-    st.markdown("---")
+    # Side-by-Side Images
+    st.markdown("### 📸 Image Process Mapping")
+    col_source, col_detected = st.columns(2, gap="large")
     
-    # Keeping your original two primary columns layout intact
-    col_img, col_info = st.columns(2, gap="large")
-    
-    with col_img:
-        st.subheader("📦 Target Visual Mapping")
-        # Direct URL linking to the FileResponse endpoint - constrained to 500px width
-        detected_image_url = f"{BACKEND_URL}/images/{img_id}/detected-image"
-        
-        # Render the image inside a clean structural border layout
+    with col_source:
         st.markdown('<div class="ai-card">', unsafe_allow_html=True)
+        st.markdown('<div class="metric-label">📥 Given Image</div>', unsafe_allow_html=True)
+        st.image(uploaded_file, caption="Original Input Source", width=500)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    with col_detected:
+        st.markdown('<div class="ai-card">', unsafe_allow_html=True)
+        st.markdown('<div class="metric-label">📦 Get Image (Detected Objects)</div>', unsafe_allow_html=True)
+        detected_image_url = f"{BACKEND_URL}/images/{img_id}/detected-image"
         st.image(detected_image_url, caption="YOLO Model Analytical Plot Bounding Boxes", width=500)
         st.markdown('</div>', unsafe_allow_html=True)
-        
-    with col_info:
-        # Wrap textual analytical payloads into modular telemetry components
-        st.markdown('<div class="ai-card">', unsafe_allow_html=True)
-        st.markdown('<div class="metric-label">📝 Image Caption Interpretation</div>', unsafe_allow_html=True)
-        st.info(data.get("caption", "No caption generated."))
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        st.markdown('<div class="ai-card">', unsafe_allow_html=True)
-        st.markdown('<div class="metric-label">🔍 Extracted Text (OCR Payload)</div>', unsafe_allow_html=True)
-        if data.get("ocr_text"):
-            st.code(data["ocr_text"], language="text")
-        else:
-            st.caption("No alphanumeric characters detected in asset matrix.")
-        st.markdown('</div>', unsafe_allow_html=True)
-            
-        st.markdown('<div class="ai-card">', unsafe_allow_html=True)
-        st.markdown('<div class="metric-label">🤖 Soft Classification Spectrum</div>', unsafe_allow_html=True)
-        st.json(data.get("classification", {}))
-        st.markdown('</div>', unsafe_allow_html=True)
-            
-        st.markdown('<div class="ai-card">', unsafe_allow_html=True)
-        st.markdown('<div class="metric-label">📦 YOLO Target Instance Array</div>', unsafe_allow_html=True)
-        st.metadata_list = data.get("detected_objects", [])
-        if st.metadata_list:
-            st.write(st.metadata_list)
-        else:
-            st.caption("No explicit object instances passed confidence thresholds.")
-        st.markdown('</div>', unsafe_allow_html=True)
 
-    # 3. LangChain Chat Section (Identical flow, stylized to be clean)
+    # Telemetry data running downward
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.header("📊 Deep Inference Insights & Telemetry Ledger")
     st.markdown("---")
-    st.header("💬 Contextual Interrogation Studio")
-    st.markdown("<p style='color: #64748B; margin-top: -0.5rem;'>Interact natively with the asset layer using conversational natural language models.</p>", unsafe_allow_html=True)
     
-    # Chat container layout
-    with st.container():
-        user_question = st.text_input(
-            "Ask a specific question about this image:", 
-            placeholder="e.g., 'What is written on the board?' or 'List the objects visible'",
-            label_visibility="collapsed"
-        )
+    st.markdown('<div class="ai-card">', unsafe_allow_html=True)
+    st.markdown('<div class="metric-label">📝 Image Caption Interpretation</div>', unsafe_allow_html=True)
+    st.info(data.get("caption", "No caption generated."))
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="ai-card">', unsafe_allow_html=True)
+    st.markdown('<div class="metric-label">🔍 Extracted Text (OCR Payload)</div>', unsafe_allow_html=True)
+    if data.get("ocr_text"):
+        st.code(data["ocr_text"], language="text")
+    else:
+        st.caption("No alphanumeric characters detected in asset matrix.")
+    st.markdown('</div>', unsafe_allow_html=True)
         
-        if st.button("Ask AI Engine", type="secondary", use_container_width=True):
-            if user_question:
-                st.markdown(f"**Question:** `{user_question}`")
-                with st.spinner("Interrogating Image Context Engine..."):
-                    try:
-                        chat_res = requests.post(
-                            f"{BACKEND_URL}/images/{img_id}/chat",
-                            json={"question": user_question}
-                        )
-                        if chat_res.status_code == 200:
-                            st.markdown("### 🤖 Response Payload:")
-                            st.info(chat_res.json()['answer'])
-                        else:
-                            st.error("Failed to get a valid response from the Chat API node.")
-                    except Exception as e:
-                        st.error(f"Chat operation failed: {str(e)}")
+    st.markdown('<div class="ai-card">', unsafe_allow_html=True)
+    st.markdown('<div class="metric-label">🤖 Soft Classification Spectrum</div>', unsafe_allow_html=True)
+    st.json(data.get("classification", {}))
+    st.markdown('</div>', unsafe_allow_html=True)
+        
+    st.markdown('<div class="ai-card">', unsafe_allow_html=True)
+    st.markdown('<div class="metric-label">📦 YOLO Target Instance Array</div>', unsafe_allow_html=True)
+    metadata_list = data.get("detected_objects", [])
+    if metadata_list:
+        st.write(metadata_list)
+    else:
+        st.caption("No explicit object instances passed confidence thresholds.")
+    st.markdown('</div>', unsafe_allow_html=True)
+else:
+    # Neutral state when no image is uploaded/analyzed yet
+    st.info("💡 Application ready. Ingest an image file using the sidebar panel control parameters to execute visual pipelines.")
