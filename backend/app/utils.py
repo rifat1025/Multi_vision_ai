@@ -5,6 +5,8 @@ from transformers import pipeline as hf_pipeline  # For HuggingFace models
 import easyocr  # For OCR
 from fastapi import FastAPI
 from app.database import models
+import cv2
+import os
 
 # Global dictionary to keep models in memory
 ml_models = {}
@@ -43,34 +45,10 @@ def run_vision_pipeline(image_path: str) -> dict:
         "ocr_text": "Welcome to National Park"
     }
 
-# def process_and_save_analysis(image_id: int, file_path: str, db_session_factory):
-    # # This runs in the background so the user gets an immediate file-received response
-    # db = db_session_factory()
-    # try:
-    #     # Run your ML Models
-    #     pipeline_results = run_vision_pipeline(file_path)
-        
-    #     # Save to analysis_results table
-    #     db_analysis = models.AnalysisResult(
-    #         image_id=image_id,
-    #         classification=pipeline_results["classification"],
-    #         detected_objects=pipeline_results["detected_objects"],
-    #         caption=pipeline_results["caption"],
-    #         ocr_text=pipeline_results["ocr_text"]
-    #     )
-    #     db.add(db_analysis)
-    #     db.commit()
-    # except Exception as e:
-    #     print(f"Error processing vision pipeline: {e}")
-    # finally:
-    #     db.close()
     
 def process_and_save_analysis(image_id: int, file_path: str, db_session_factory):
-    
     db = db_session_factory()
-    
     try:
-        # Open image via PIL for HF and OCR
         pil_img = Image.open(file_path).convert("RGB")
 
         # 1. Object Detection (YOLOv8)
@@ -78,10 +56,19 @@ def process_and_save_analysis(image_id: int, file_path: str, db_session_factory)
         detected_objects = []
         for box in yolo_results.boxes:
             detected_objects.append({
-                "box": [round(x, 2) for x in box.xyxy[0].tolist()], # [xmin, ymin, xmax, ymax]
+                "box": [round(x, 2) for x in box.xyxy[0].tolist()],
                 "label": yolo_results.names[int(box.cls[0])],
                 "confidence": round(float(box.conf[0]), 2)
             })
+
+        # --- SAVE THE ANNOTATED IMAGE ---
+        annotated_dir = "static/annotated"
+        os.makedirs(annotated_dir, exist_ok=True)
+        # Generate an annotated image array from YOLO results
+        annotated_frame = yolo_results.plot() 
+        annotated_path = os.path.join(annotated_dir, f"detected_{image_id}.jpg")
+        cv2.imwrite(annotated_path, annotated_frame)
+        # --------------------------------
 
         # 2. Image Captioning (BLIP)
         caption_output = ml_models["captioner"](pil_img)
@@ -92,7 +79,7 @@ def process_and_save_analysis(image_id: int, file_path: str, db_session_factory)
         classification_dict = {item['label']: round(item['score'], 3) for item in clf_output}
 
         # 4. OCR Text Extraction (EasyOCR)
-        ocr_results = ml_models["ocr"].readtext(file_path, detail=0) # Changed "ocr_reader" to "ocr"
+        ocr_results = ml_models["ocr"].readtext(file_path, detail=0)
         extracted_text = " ".join(ocr_results)
 
         # 5. Save everything to DB
@@ -105,7 +92,6 @@ def process_and_save_analysis(image_id: int, file_path: str, db_session_factory)
         )
         db.add(db_analysis)
         db.commit()
-        print(f"Successfully processed and saved analysis for Image ID: {image_id}")
 
     except Exception as e:
         print(f"Error processing vision pipeline for image {image_id}: {e}")

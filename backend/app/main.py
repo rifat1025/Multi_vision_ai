@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
+from fastapi.responses import FileResponse
 
 load_dotenv()
 
@@ -122,4 +123,19 @@ def chat_with_image(image_id: int, payload: schemas.ChatRequest, db: Session = D
         question=payload.question,
         answer=ai_answer .content
     )
+
+@app.get("/images/{image_id}/detected-image")
+def get_detected_image(image_id: int):
+    """
+    Returns the final annotated image with bounding boxes drawn over it.
+    """
+    annotated_path = f"static/annotated/detected_{image_id}.jpg"
+    
+    if not os.path.exists(annotated_path):
+        raise HTTPException(
+            status_code=404, 
+            detail="Annotated image not found. The model might still be processing."
+        )
+        
+    return FileResponse(annotated_path, media_type="image/jpeg")
     
