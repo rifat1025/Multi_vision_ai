@@ -52,7 +52,7 @@ The application behaves like an AI assistant that can "see" the image and discus
 ## Project Banner
 
 <p align="center">
-  <img src="assets/dashboardt.png" width="900">
+  <img src="assets/dashboard.png" width="900">
 </p>
 ## 📤 Upload an Image
 
