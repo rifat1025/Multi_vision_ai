@@ -1,0 +1,26 @@
+# FastAPI Core Framework
+fastapi>=0.110.0
+uvicorn>=0.28.0
+python-multipart>=0.0.9
+
+# Relational Database & Configuration
+SQLAlchemy>=2.0.0
+python-dotenv>=1.0.1
+
+# Computer Vision & Deep Learning Infrastructure
+torch>=2.2.0
+torchvision>=0.17.0
+ultralytics>=8.1.0
+transformers>=4.38.0
+easyocr>=1.7.1
+opencv-python-headless>=4.9.0.80
+pillow>=10.2.0
+
+# LLM Orchestration & Advanced RAG (LangChain)
+langchain>=0.1.0
+langchain-community>=0.0.10
+langchain-core>=0.1.10
+
+# Web Dashboard Client
+streamlit>=1.31.0
+requests>=2.31.0
